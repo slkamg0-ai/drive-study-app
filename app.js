@@ -1311,13 +1311,14 @@
     return false;
   }
 
-  // Resilient multi-model Gemini REST API caller
+  // Resilient multi-model Gemini REST API caller with automatic overload fallback
   async function callGeminiApi(key, payload) {
     const candidateModels = [
       'gemini-3.8-flash',
       'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
-      'gemini-2.5-flash'
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite'
     ];
     let lastErr = null;
     for (const model of candidateModels) {
@@ -1334,24 +1335,27 @@
         const errData = await res.json().catch(() => ({}));
         const errMsg = errData.error?.message || `HTTP ${res.status}`;
         
-        // Check if model is retired, not found, or unsupported
-        const isUnavailable = res.status === 404 || 
-          /not\s*found|no\s*longer\s*available|deprecated|not\s*supported/i.test(errMsg);
+        // Check if model is retired, not found, or experiencing temporary high demand / rate limits (503 / 429)
+        const isUnavailableOrBusy = res.status === 404 || res.status === 429 || res.status === 503 || 
+          /not\s*found|no\s*longer\s*available|deprecated|not\s*supported|high\s*demand|temporar|overload|quota|rate/i.test(errMsg);
 
-        if (isUnavailable) {
+        if (isUnavailableOrBusy) {
           lastErr = new Error(errMsg);
+          // Wait 1.2s before trying the next alternative model
+          await new Promise(r => setTimeout(r, 1200));
           continue; // try next candidate model
         }
         throw new Error(errMsg);
       } catch (e) {
         lastErr = e;
-        if (e.message && /not\s*found|no\s*longer\s*available|deprecated|not\s*supported|404/i.test(e.message)) {
+        if (e.message && /not\s*found|no\s*longer\s*available|deprecated|not\s*supported|high\s*demand|temporar|overload|quota|rate|404|429|503/i.test(e.message)) {
+          await new Promise(r => setTimeout(r, 1200));
           continue;
         }
         throw e;
       }
     }
-    throw lastErr || new Error('Gemini API 호출에 실패했습니다.');
+    throw lastErr || new Error('모든 Gemini 모델 서버가 현재 일시 혼잡합니다. 잠시 후 다시 시도해 주세요.');
   }
 
   // --- Gemini API Call Functions ---
@@ -1480,12 +1484,22 @@ ${JSON.stringify(chunk.map(q => ({
 오직 유효한 JSON 배열만 응답하세요. 각 객체는 {"id": 문제번호, "explanation": "해설내용"} 형태여야 합니다.
 해설은 핵심 개념 ➔ 정답 이유 ➔ 오답 함정/암기 팁 순으로 부드러운 구어체 3~4문장으로 작성하세요. 마크다운 별표 기호는 빼주세요.`;
 
-        const data = await callGeminiApi(key, {
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        });
+        let data = null;
+        try {
+          data = await callGeminiApi(key, {
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          });
+        } catch (chunkErr) {
+          console.warn(`Chunk ${i + 1} overload, pausing 2.5s and retrying...`, chunkErr);
+          await new Promise(r => setTimeout(r, 2500));
+          data = await callGeminiApi(key, {
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          });
+        }
 
-        const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawJson) {
           try {
             const parsedArr = JSON.parse(rawJson);
@@ -1509,12 +1523,15 @@ ${JSON.stringify(chunk.map(q => ({
           localStorage.setItem(STORAGE_KEYS.CUSTOM_DATASETS, JSON.stringify(customOnly));
         }
         saveCurrentState();
+
+        // 1.5초 호흡 대기 (구글 무료 API의 분당 요청량 제한 및 과부하 회피)
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       renderCard(true);
       showToast('🎉 전체 문제의 Gemini AI 전문 해설이 완성되었습니다!');
     } catch (err) {
-      alert('AI 해설 생성 오류: ' + err.message);
+      alert('AI 해설 생성 중 구글 서버 일시 혼잡:\n\n' + err.message + '\n\n💡 지금까지 생성된 문제 해설은 안전하게 저장되었습니다. 잠시 후 [전체 AI 해설 자동 완성]을 다시 누르시면 이어서 진행됩니다.');
     } finally {
       if (elements.btnBatchGemini) {
         elements.btnBatchGemini.textContent = '🤖 현재 문제집 전체 Gemini AI 해설 자동 완성';
