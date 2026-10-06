@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>드라이브 런 (Drive Learn) - Neumorphic Audio Study</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ebf0f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body>
+
+  <!-- App Mobile Frame (Matches Mockup) -->
+  <div class="app-wrapper">
+    
+    <!-- 1. Top Navigation Bar -->
+    <header class="top-nav-bar">
+      <button id="btn-top-prev" class="neu-btn neu-square" title="이전 문제">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </button>
+
+      <div class="top-title-badge" id="top-title-badge">
+        측량및지형공간정보
+      </div>
+
+      <button id="btn-open-settings" class="neu-btn neu-square" title="설정">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Resumed Previous Session Banner -->
+    <div id="resume-banner" class="resume-banner" style="display: none;">
+      <span id="resume-msg">📌 이전 학습 위치에서 복원되었습니다.</span>
+      <button id="btn-dismiss-resume" class="neu-btn" style="padding: 4px 10px; font-size: 0.75rem;">닫기</button>
+    </div>
+
+    <!-- 2. Upper Grid: Cover Card (Left) + Info & Action (Right) -->
+    <section class="upper-grid">
+      <!-- Left Cover Card (matches book cover in screenshot) -->
+      <div class="cover-card neu-card" id="cover-card">
+        <div class="cover-card-badge" id="cover-subject-badge">1과목</div>
+        
+        <div class="cover-card-center">
+          <div class="cover-card-qnum" id="cover-qnum">Q.01</div>
+          <div class="cover-audio-wave" id="cover-audio-wave">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <div class="cover-card-sub" id="cover-status-text">대기 중</div>
+      </div>
+
+      <!-- Right Column: Info Card + Read/Bookmark Action Buttons -->
+      <div class="upper-right-col">
+        <div class="book-info-card neu-card">
+          <h2 class="exam-title" id="exam-title">기출문제 카드</h2>
+          <p class="exam-author" id="exam-subject-detail">측지학 및 위성측위</p>
+          <div class="rating-stars" id="rating-stars">
+            ★★★★★
+          </div>
+          <p class="exam-meta" id="exam-meta">2017 · 100 Questions</p>
+        </div>
+
+        <!-- Action Row (Matches 'Read' & Bookmark button in screenshot) -->
+        <div class="action-btn-row">
+          <button id="btn-play-pause" class="neu-btn neu-read-btn" title="재생 / 일시정지">
+            <span id="play-icon">▶</span>
+            <span id="play-text">Read</span>
+          </button>
+          
+          <button id="btn-bookmark" class="neu-btn neu-square neu-bookmark-btn" title="북마크 / 오답 저장">
+            <span id="bookmark-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Middle Main Content Card (matches large text card in screenshot) -->
+    <main class="main-content-card neu-card">
+      <div class="card-inner-header">
+        <span class="q-progress-tag" id="q-progress-tag">문제 1 / 100</span>
+        <span class="q-phase-badge" id="voice-status-pill">대기 중</span>
+      </div>
+
+      <!-- Question Text -->
+      <div class="question-body" id="question-text">
+        문제를 불러오는 중입니다...
+      </div>
+
+      <!-- Options 1, 2, 3, 4 -->
+      <div class="options-container" id="options-list">
+        <!-- Rendered by app.js -->
+      </div>
+
+      <!-- Answer & Explanation Section (styled with tactile inset box) -->
+      <div class="answer-box neu-inset" id="answer-reveal-box" style="display: none;">
+        <div class="answer-header" style="justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="answer-tag">정답:</span>
+            <span class="answer-highlight" id="answer-badge-text">-</span>
+          </div>
+          <button id="btn-edit-exp" class="neu-btn" style="padding: 3px 8px; font-size: 0.72rem;" title="해설 직접 수정하기">✏️ 해설 편집</button>
+        </div>
+        <div class="explanation-text" id="explanation-text">
+          해설이 여기에 표시됩니다.
+        </div>
+      </div>
+    </main>
+
+    <!-- 4. Bottom Navigation Dock (matches 4-5 icons in screenshot) -->
+    <footer class="bottom-dock">
+      <!-- Icon 1: Home / Subject Select -->
+      <button id="btn-dock-subject" class="neu-btn neu-square dock-btn" title="과목 목록">
+        <svg viewBox="0 0 24 24">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+      </button>
+
+      <!-- Icon 2: Prev Question -->
+      <button id="btn-prev" class="neu-btn neu-square dock-btn" title="이전 문제">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+        </svg>
+      </button>
+
+      <!-- Icon 3: Replay Current Question -->
+      <button id="btn-replay" class="neu-btn neu-square dock-btn" title="현재 문제 다시 듣기">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.85 20 14.48 20 13c0-4.42-3.58-8-8-8zm-6 8c0-1.01.25-1.97.7-2.8L5.24 8.74C4.46 10.15 4 11.52 4 13c0 4.42 3.58 8 8 8v4l5-5-5-5v4c-3.31 0-6-2.69-6-6z"/>
+        </svg>
+      </button>
+
+      <!-- Icon 4: Next Question -->
+      <button id="btn-next" class="neu-btn neu-square dock-btn" title="다음 문제">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+        </svg>
+      </button>
+
+      <!-- Icon 5: Files / Manage Datasets -->
+      <button id="btn-open-files" class="neu-btn neu-square dock-btn" title="문제집 관리">
+        <svg viewBox="0 0 24 24">
+          <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/>
+        </svg>
+      </button>
+    </footer>
+
+  </div>
+
+  <!-- Settings Modal (Neumorphic) -->
+  <div id="modal-settings" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ 학습 및 음성 설정</h3>
+        <button id="btn-close-settings" class="neu-btn modal-close-btn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="setting-read-mode">📖 음성 낭독 방식</label>
+        <select id="setting-read-mode" class="neu-select">
+          <option value="CORE">🚗 운전 핵심 모드 (문제 → 정답 → 해설, 보기 생략)</option>
+          <option value="FULL">📋 정규 시험 모드 (문제 → 보기 1~4 → 정답 → 해설)</option>
+          <option value="ANSWER_ONLY">💡 정답/해설 집중 모드 (정답과 해설만 연속 청취)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="setting-speech-rate">⚡ 음성 속도</label>
+        <select id="setting-speech-rate" class="neu-select">
+          <option value="0.9">0.9배속 (차분하게)</option>
+          <option value="1.0" selected>1.0배속 (표준 속도)</option>
+          <option value="1.15">1.15배속 (약간 빠르게)</option>
+          <option value="1.3">1.3배속 (빠르게)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="setting-thinking-pause">⏳ 생각할 시간 (정답 전 대기)</label>
+        <select id="setting-thinking-pause" class="neu-select">
+          <option value="0">0초 (즉시 발표)</option>
+          <option value="2">2초</option>
+          <option value="3" selected>3초 (추천)</option>
+          <option value="5">5초</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="setting-next-pause">⏱️ 해설 후 다음 문제 대기 시간</label>
+        <select id="setting-next-pause" class="neu-select">
+          <option value="1">1초</option>
+          <option value="2" selected>2초 (표준)</option>
+          <option value="3">3초</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="setting-voice-select">🎙️ 한국어 음성</label>
+        <select id="setting-voice-select" class="neu-select">
+          <option value="DEFAULT">시스템 기본 음성</option>
+        </select>
+      </div>
+
+      <button id="btn-save-settings" class="neu-btn btn-primary-block">설정 저장</button>
+    </div>
+  </div>
+
+  <!-- Subject Filter Modal -->
+  <div id="modal-subject" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">📚 과목 및 필터 선택</h3>
+        <button id="btn-close-subject" class="neu-btn modal-close-btn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">학습할 과목 선택</label>
+        <select id="subject-filter-select" class="neu-select">
+          <option value="ALL">전체 과목 (100문제)</option>
+          <option value="1과목">1과목: 측지학 및 위성측위시스템 (1~20)</option>
+          <option value="2과목">2과목: 응용측량 (21~40)</option>
+          <option value="3과목">3과목: 사진측량 및 원격탐사 (41~60)</option>
+          <option value="4과목">4과목: 지리정보시스템 (61~80)</option>
+          <option value="5과목">5과목: 측량학 (81~100)</option>
+          <option value="BOOKMARK">⭐ 즐겨찾기 / 오답 모아보기</option>
+        </select>
+      </div>
+
+      <button id="btn-apply-subject" class="neu-btn btn-primary-block">과목 적용하기</button>
+    </div>
+  </div>
+
+  <!-- File & Question Bank Modal (Supports PDF, CSV, TXT, JSON, Paste) -->
+  <div id="modal-files" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">📂 기출문제 추가 및 관리</h3>
+        <button id="btn-close-files" class="neu-btn modal-close-btn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">현재 학습 중인 문제집 선택</label>
+        <select id="active-dataset-select" class="neu-select">
+          <option value="DEFAULT">2017년 3월 5일 측량및지형공간정보기사 (100문제)</option>
+        </select>
+      </div>
+
+      <hr style="border: none; border-top: 1px dashed rgba(197, 208, 224, 0.6);">
+
+      <!-- PDF Direct Upload -->
+      <div class="form-group">
+        <label class="form-label">📄 PDF 기출문제 직접 업로드 (.pdf)</label>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px;">
+          전자문제집 CBT 등의 PDF 파일을 선택하면 브라우저에서 문제와 답안표를 자동 분석합니다.
+        </p>
+        <input type="file" id="file-input-pdf" accept=".pdf" class="neu-input">
+      </div>
+
+      <!-- CSV / Excel Direct Upload -->
+      <div class="form-group">
+        <label class="form-label">📊 엑셀 / CSV 파일 업로드 (.csv)</label>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px;">
+          '문제, 보기1, 보기2, 보기3, 보기4, 정답, 해설' 열로 작성된 CSV 파일 지원
+        </p>
+        <input type="file" id="file-input-csv" accept=".csv" class="neu-input">
+      </div>
+
+      <!-- TXT / JSON Direct Upload -->
+      <div class="form-group">
+        <label class="form-label">📝 텍스트(.txt) 또는 JSON(.json) 파일</label>
+        <input type="file" id="file-input-txt" accept=".txt,.json,.md" class="neu-input">
+      </div>
+
+      <!-- Direct Paste -->
+      <div class="form-group">
+        <label class="form-label">📋 텍스트 직접 복사-붙여넣기</label>
+        <textarea id="paste-text-input" class="neu-textarea" placeholder="웹페이지나 문서에서 복사한 문제를 그대로 붙여넣으세요.
+예시:
+1. 타원체의 편평률 공식은?
+① (a-b)/a ② (a-b)/b ③ a/b ④ b/a
+정답: 1번
+해설: 편평률 f = (a-b)/a 입니다."></textarea>
+        <button id="btn-parse-paste-text" class="neu-btn btn-primary-block">붙여넣은 내용으로 문제집 생성</button>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-download-csv-sample" class="neu-btn" style="flex: 1; padding: 10px; font-size: 0.8rem;">📊 CSV 양식</button>
+        <button id="btn-download-sample" class="neu-btn" style="flex: 1; padding: 10px; font-size: 0.8rem;">⚙️ JSON 양식</button>
+        <button id="btn-reset-data" class="neu-btn" style="flex: 1; padding: 10px; font-size: 0.8rem; color: var(--danger-color);">🔄 초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Explanation Modal -->
+  <div id="modal-edit-exp" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ 문제 해설 수정</h3>
+        <button id="btn-close-edit-exp" class="neu-btn modal-close-btn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" id="edit-exp-qlabel">해설 내용 입력</label>
+        <textarea id="edit-exp-textarea" class="neu-textarea" style="min-height: 150px; font-size: 0.95rem; line-height: 1.6;" placeholder="음성으로 읽어줄 상세 해설을 입력하세요."></textarea>
+      </div>
+
+      <button id="btn-save-edit-exp" class="neu-btn btn-primary-block">해설 저장하기</button>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- PDF.js client-side library & App scripts -->
+  <script src="pdf.min.js"></script>
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
