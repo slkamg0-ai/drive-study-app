@@ -1,0 +1,7 @@
+name = "drive-study"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+
+[assets]
+directory = "."
+binding = "ASSETS"
