@@ -1313,7 +1313,12 @@
 
   // Resilient multi-model Gemini REST API caller
   async function callGeminiApi(key, payload) {
-    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+    const candidateModels = [
+      'gemini-3.8-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-2.5-flash'
+    ];
     let lastErr = null;
     for (const model of candidateModels) {
       try {
@@ -1328,14 +1333,19 @@
         }
         const errData = await res.json().catch(() => ({}));
         const errMsg = errData.error?.message || `HTTP ${res.status}`;
-        if (res.status === 404 || errMsg.toLowerCase().includes('not found')) {
+        
+        // Check if model is retired, not found, or unsupported
+        const isUnavailable = res.status === 404 || 
+          /not\s*found|no\s*longer\s*available|deprecated|not\s*supported/i.test(errMsg);
+
+        if (isUnavailable) {
           lastErr = new Error(errMsg);
-          continue; // fallback to next model
+          continue; // try next candidate model
         }
         throw new Error(errMsg);
       } catch (e) {
         lastErr = e;
-        if (e.message && (e.message.includes('404') || e.message.toLowerCase().includes('not found'))) {
+        if (e.message && /not\s*found|no\s*longer\s*available|deprecated|not\s*supported|404/i.test(e.message)) {
           continue;
         }
         throw e;
