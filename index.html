@@ -110,11 +110,24 @@
           <div style="display: flex; align-items: center; gap: 8px;">
             <span class="answer-tag">정답:</span>
             <span class="answer-highlight" id="answer-badge-text">-</span>
+            <span id="ai-exp-badge" style="display: none; font-size: 0.68rem; padding: 2px 7px; background: rgba(37, 99, 235, 0.12); color: #2563eb; border-radius: 6px; font-weight: 700;">✨ Gemini AI</span>
           </div>
-          <button id="btn-edit-exp" class="neu-btn" style="padding: 3px 8px; font-size: 0.72rem;" title="해설 직접 수정하기">✏️ 해설 편집</button>
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-gemini-ai" class="neu-btn" style="padding: 3px 8px; font-size: 0.72rem; color: #2563eb; font-weight: 600;" title="Gemini AI로 상세 해설 생성">✨ AI 해설</button>
+            <button id="btn-edit-exp" class="neu-btn" style="padding: 3px 8px; font-size: 0.72rem;" title="해설 직접 수정하기">✏️ 편집</button>
+          </div>
         </div>
         <div class="explanation-text" id="explanation-text">
           해설이 여기에 표시됩니다.
+        </div>
+        <!-- AI Prompt Callout Banner (shown if explanation is empty/placeholder) -->
+        <div id="ai-exp-prompt-banner" style="display: none; margin-top: 8px; padding: 8px 10px; background: rgba(37, 99, 235, 0.08); border-radius: 10px; border: 1px dashed rgba(37, 99, 235, 0.35); text-align: center;">
+          <div style="font-size: 0.76rem; color: #1e40af; margin-bottom: 5px; font-weight: 500;">
+            💡 상세 해설이 없습니다. 문제 출제 의도와 원리를 AI로 분석할까요?
+          </div>
+          <button id="btn-banner-gemini" class="neu-btn" style="font-size: 0.74rem; color: #2563eb; font-weight: 700; padding: 4px 10px;">
+            ✨ Gemini AI로 문제 해석 및 해설 생성
+          </button>
         </div>
       </div>
     </main>
@@ -212,6 +225,20 @@
         </select>
       </div>
 
+      <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+        <label class="form-label" for="setting-auto-ai" style="margin-bottom: 0;">🤖 해설 부족 시 AI 실시간 자동 생성</label>
+        <input type="checkbox" id="setting-auto-ai" style="transform: scale(1.2); cursor: pointer;" checked>
+      </div>
+
+      <div class="form-group" style="margin-top: 6px; border-top: 1px dashed rgba(197, 208, 224, 0.6); padding-top: 10px;">
+        <label class="form-label" for="setting-gemini-key">✨ Google Gemini API 키 (AI 자동 해설 생성용)</label>
+        <input type="password" id="setting-gemini-key" class="neu-input" placeholder="AIzaSy... (무료 발급 키 입력)">
+        <small style="color: var(--text-muted); font-size: 0.76rem; line-height: 1.4;">
+          Google AI Studio에서 무료로 1초 만에 발급받아 등록하면, 모든 문제에 대해 전문 강사 수준의 AI 해설을 실시간 생성합니다.
+          <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #2563eb; font-weight: 700; text-decoration: underline;">무료 키 발급 링크</a>
+        </small>
+      </div>
+
       <button id="btn-save-settings" class="neu-btn btn-primary-block">설정 저장</button>
     </div>
   </div>
@@ -256,6 +283,12 @@
         </select>
       </div>
 
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <button id="btn-restore-default" class="neu-btn btn-primary-block" style="color: #2563eb; font-weight: 700; padding: 9px;">
+          📚 기본 문제집(100문제 상세해설 내장)으로 복원
+        </button>
+      </div>
+
       <hr style="border: none; border-top: 1px dashed rgba(197, 208, 224, 0.6);">
 
       <!-- PDF Direct Upload -->
@@ -291,7 +324,15 @@
 ① (a-b)/a ② (a-b)/b ③ a/b ④ b/a
 정답: 1번
 해설: 편평률 f = (a-b)/a 입니다."></textarea>
-        <button id="btn-parse-paste-text" class="neu-btn btn-primary-block">붙여넣은 내용으로 문제집 생성</button>
+        <button id="btn-parse-paste-text" class="neu-btn btn-primary-block" style="margin-top: 6px;">붙여넣은 내용으로 문제집 생성</button>
+      </div>
+
+      <!-- Batch AI Explanations -->
+      <div class="form-group" style="margin-top: 10px; border-top: 1px dashed rgba(197, 208, 224, 0.6); padding-top: 10px;">
+        <label class="form-label">✨ Gemini AI로 해설 자동 채우기</label>
+        <button id="btn-batch-gemini" class="neu-btn btn-primary-block" style="color: #2563eb; border-color: rgba(37, 99, 235, 0.4); font-weight: 700;">
+          🤖 현재 문제집 전체 Gemini AI 해설 자동 완성
+        </button>
       </div>
 
       <div style="display: flex; gap: 8px;">
@@ -316,6 +357,29 @@
       </div>
 
       <button id="btn-save-edit-exp" class="neu-btn btn-primary-block">해설 저장하기</button>
+    </div>
+  </div>
+
+  <!-- Gemini API Key Setup Modal -->
+  <div id="modal-gemini-setup" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">✨ Google Gemini AI 해설 연동</h3>
+        <button id="btn-close-gemini-setup" class="neu-btn modal-close-btn">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-sub); line-height: 1.5; margin-bottom: 12px;">
+        Google Gemini AI와 연동하면 기출문제의 출제 의도 파악, 계산 공식, 오답 함정까지 <strong>전문 1타 강사 수준의 음성용 상세 해설</strong>을 실시간 생성합니다!
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="input-gemini-key-setup">Gemini API 키</label>
+        <input type="password" id="input-gemini-key-setup" class="neu-input" placeholder="AIzaSy... (API 키를 붙여넣으세요)">
+      </div>
+      <div style="background: rgba(37, 99, 235, 0.08); padding: 10px 12px; border-radius: 12px; margin-bottom: 14px; font-size: 0.8rem; color: #1e40af; line-height: 1.4;">
+        💡 <strong>무료 키 발급 (1초 소요):</strong><br>
+        구글 계정만 있으면 Google AI Studio에서 무료로 즉시 발급됩니다.<br>
+        <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #2563eb; font-weight: bold; text-decoration: underline;">👉 aistudio.google.com/apikey 바로가기</a>
+      </div>
+      <button id="btn-save-gemini-key" class="neu-btn btn-primary-block" style="color: #2563eb; font-weight: 700;">키 저장 & AI 해설 즉시 생성</button>
     </div>
   </div>
 

@@ -22,7 +22,9 @@
     rate: 1.0,              // 0.9 ~ 1.3
     thinkingPause: 3,       // 초
     nextPause: 2,           // 초
-    voiceURI: ''
+    voiceURI: '',
+    geminiKey: '',
+    autoAi: true
   };
 
   // --- State ---
@@ -84,6 +86,9 @@
     answerRevealBox: document.getElementById('answer-reveal-box'),
     answerBadgeText: document.getElementById('answer-badge-text'),
     explanationText: document.getElementById('explanation-text'),
+    aiExpBadge: document.getElementById('ai-exp-badge'),
+    aiExpPromptBanner: document.getElementById('ai-exp-prompt-banner'),
+    btnBannerGemini: document.getElementById('btn-banner-gemini'),
     // Bottom Dock
     btnDockSubject: document.getElementById('btn-dock-subject'),
     btnPrev: document.getElementById('btn-prev'),
@@ -100,12 +105,17 @@
     settingThinkingPause: document.getElementById('setting-thinking-pause'),
     settingNextPause: document.getElementById('setting-next-pause'),
     settingVoiceSelect: document.getElementById('setting-voice-select'),
+    settingGeminiKey: document.getElementById('setting-gemini-key'),
+    settingAutoAi: document.getElementById('setting-auto-ai'),
+    btnGeminiAi: document.getElementById('btn-gemini-ai'),
+    btnBatchGemini: document.getElementById('btn-batch-gemini'),
     modalSubject: document.getElementById('modal-subject'),
     btnCloseSubject: document.getElementById('btn-close-subject'),
     subjectFilterSelect: document.getElementById('subject-filter-select'),
     btnApplySubject: document.getElementById('btn-apply-subject'),
     modalFiles: document.getElementById('modal-files'),
     btnCloseFiles: document.getElementById('btn-close-files'),
+    btnRestoreDefault: document.getElementById('btn-restore-default'),
     activeDatasetSelect: document.getElementById('active-dataset-select'),
     fileInputPdf: document.getElementById('file-input-pdf'),
     fileInputCsv: document.getElementById('file-input-csv'),
@@ -121,7 +131,12 @@
     btnCloseEditExp: document.getElementById('btn-close-edit-exp'),
     btnSaveEditExp: document.getElementById('btn-save-edit-exp'),
     editExpQlabel: document.getElementById('edit-exp-qlabel'),
-    editExpTextarea: document.getElementById('edit-exp-textarea')
+    editExpTextarea: document.getElementById('edit-exp-textarea'),
+    // Gemini Setup Modal
+    modalGeminiSetup: document.getElementById('modal-gemini-setup'),
+    btnCloseGeminiSetup: document.getElementById('btn-close-gemini-setup'),
+    inputGeminiKeySetup: document.getElementById('input-gemini-key-setup'),
+    btnSaveGeminiKey: document.getElementById('btn-save-gemini-key')
   };
 
   // --- Web Audio Chime Synth ---
@@ -418,6 +433,14 @@
       elements.answerRevealBox.style.display = 'block';
       elements.answerBadgeText.textContent = q.answerText || `${q.answer}번`;
       elements.explanationText.textContent = q.explanation || '해설이 준비되어 있지 않습니다.';
+
+      const isShallow = isPlaceholderExplanation(q.explanation);
+      if (elements.aiExpBadge) {
+        elements.aiExpBadge.style.display = (q.isAiGenerated || (!isShallow && (q.explanation || '').length > 40)) ? 'inline-block' : 'none';
+      }
+      if (elements.aiExpPromptBanner) {
+        elements.aiExpPromptBanner.style.display = isShallow ? 'block' : 'none';
+      }
     } else {
       elements.answerRevealBox.style.display = 'none';
     }
@@ -511,10 +534,23 @@
     }, 1000);
   }
 
-  function stepRevealAndAnswer(q) {
+  async function stepRevealAndAnswer(q) {
     state.currentPhase = 'answer';
     renderCard(true);
     playSoftChime();
+
+    // Auto AI Explanation if enabled and key is set
+    if (state.settings.autoAi && state.settings.geminiKey && isPlaceholderExplanation(q.explanation)) {
+      updateStatus('thinking', '✨ AI 해설 생성 중...', false);
+      elements.explanationText.textContent = '✨ Gemini AI가 문제와 정답을 분석하여 전문 해설을 생성하고 있습니다...';
+      try {
+        await callGeminiForQuestion(q, true);
+      } catch (e) {
+        console.error('Auto AI generation error:', e);
+      }
+    }
+
+    if (!state.isPlaying) return;
 
     updateStatus('revealed', '정답 및 해설', true);
 
@@ -649,6 +685,22 @@
 
       addNewDataset(title, parsedQuestions);
       showToast(`🎉 PDF에서 ${parsedQuestions.length}개 문제를 성공적으로 등록했습니다!`);
+
+      // Prompt to auto-generate AI explanations if PDF lacks explanations
+      const sampleHasExp = parsedQuestions.some(q => q.explanation && !isPlaceholderExplanation(q.explanation));
+      if (!sampleHasExp) {
+        setTimeout(() => {
+          if (state.settings.geminiKey) {
+            if (confirm(`📄 PDF 기출문제 ${parsedQuestions.length}문제를 등록했습니다!\n\n💡 이 시험지에는 문제와 정답만 있고 상세 해설이 없습니다.\nGoogle Gemini AI로 전체 문제의 전문 해설을 지금 바로 자동 완성하시겠습니까?\n(약 20~30초 소요, 취소 시 개별 문제마다 자동 생성)`)) {
+              callGeminiBatch();
+            }
+          } else {
+            if (confirm(`📄 PDF 기출문제 ${parsedQuestions.length}문제를 등록했습니다!\n\n💡 이 시험지에는 상세 해설이 없습니다.\nGoogle Gemini AI 키를 연동하면 AI가 모든 문제의 전문 해설을 실시간 분석 및 생성해 드립니다.\n지금 무료 Gemini API 키를 등록하시겠습니까?`)) {
+              openGeminiSetupModal();
+            }
+          }
+        }, 500);
+      }
     } catch (err) {
       alert('PDF 분석 오류: ' + err.message);
     }
@@ -660,13 +712,9 @@
     const ansTokens = fullText.match(/[①②③④]/g) || [];
     if (ansTokens.length >= 100) {
       const last100 = ansTokens.slice(-100);
+      const circleMap = { '①': 1, '②': 2, '③': 3, '④': 4 };
       last100.forEach((sym, idx) => {
-        let num = 1;
-        if (sym === '①') num = 1;
-        else if (sym === '②') num = 2;
-        else if (sym === '③') num = 3;
-        else if (sym === '④') num = 4;
-        answerMap[idx + 1] = num;
+        answerMap[idx + 1] = circleMap[sym] || 1;
       });
     }
 
@@ -714,6 +762,11 @@
       }
 
       const ansNum = answerMap[item.id] || 1;
+      const ansOptionText = options[ansNum - 1] 
+        ? options[ansNum - 1].replace(/^[①②③④\d\.\)\s]+/, '').trim() 
+        : '';
+      const ansText = ansOptionText ? `${ansNum}번 (${ansOptionText})` : `${ansNum}번`;
+
       // 1) 해설 텍스트가 PDF 원문에 존재하는지 검사 ([해설], [풀이], 해설: 등)
       let explanation = '';
       const expMatch = raw.match(/(?:\[\s*(?:해설|풀이|정답과\s*해설|정답및해설|오답노트|오답피하기|참고)\s*\]|해설\s*[:\.]|풀이\s*[:\.]|※\s*해설|★\s*해설)\s*([\s\S]*?)$/i);
@@ -760,9 +813,9 @@
         .filter((_, idx) => idx !== (ansNum - 1))
         .map(o => o.replace(/^[①②③④\d\.\)\s]+/, '').trim())
         .slice(0, 2);
-      return `정답은 ${ansNum}번, '${ansOptionText}' 입니다. 문제에서 옳지 않거나 틀린 항목을 묻고 있으므로 ${ansNum}번이 틀린 설명입니다. 나머지 보기('${otherOpts.join("', '")}' 등)는 올바른 설명에 해당합니다.`;
+      return `정답은 ${ansNum}번, '${ansOptionText}' 입니다. 문제에서 옳지 않거나 틀린 설명을 묻고 있으므로 ${ansNum}번이 오답에 해당합니다. [✨ AI 해설] 버튼을 누르면 Gemini AI가 핵심 원리와 함정 분석을 실시간 생성해 드립니다.`;
     } else {
-      return `정답은 ${ansNum}번, '${ansOptionText}' 입니다. 문제의 조건과 출제 의도에 가장 올바르게 부합하는 정답입니다.`;
+      return `정답은 ${ansNum}번, '${ansOptionText}' 입니다. 문제의 조건과 출제 의도에 가장 올바르게 부합하는 정답입니다. [✨ AI 해설] 버튼을 누르면 Gemini AI가 계산 공식과 해설을 실시간 분석해 드립니다.`;
     }
   }
 
@@ -924,6 +977,12 @@
       elements.settingSpeechRate.value = state.settings.rate.toString();
       elements.settingThinkingPause.value = state.settings.thinkingPause.toString();
       elements.settingNextPause.value = state.settings.nextPause.toString();
+      if (elements.settingAutoAi) {
+        elements.settingAutoAi.checked = state.settings.autoAi !== false;
+      }
+      if (elements.settingGeminiKey) {
+        elements.settingGeminiKey.value = state.settings.geminiKey || '';
+      }
       populateVoiceList();
       elements.modalSettings.classList.add('open');
     });
@@ -938,6 +997,12 @@
       state.settings.thinkingPause = parseInt(elements.settingThinkingPause.value);
       state.settings.nextPause = parseInt(elements.settingNextPause.value);
       state.settings.voiceURI = elements.settingVoiceSelect.value;
+      if (elements.settingAutoAi) {
+        state.settings.autoAi = elements.settingAutoAi.checked;
+      }
+      if (elements.settingGeminiKey) {
+        state.settings.geminiKey = elements.settingGeminiKey.value.trim();
+      }
       saveCurrentState();
       elements.modalSettings.classList.remove('open');
       showToast('설정이 저장되었습니다.');
@@ -1139,6 +1204,70 @@
       showToast('해설이 저장되었습니다! 💾');
     });
 
+    // Gemini AI Single Question Explanation Generator
+    if (elements.btnGeminiAi) {
+      elements.btnGeminiAi.addEventListener('click', async () => {
+        const q = getCurrentQuestion();
+        if (!q) return;
+        await callGeminiForQuestion(q);
+      });
+    }
+
+    // Gemini AI Banner Prompt Button
+    if (elements.btnBannerGemini) {
+      elements.btnBannerGemini.addEventListener('click', async () => {
+        const q = getCurrentQuestion();
+        if (!q) return;
+        await callGeminiForQuestion(q);
+      });
+    }
+
+    // Gemini AI Batch Generator
+    if (elements.btnBatchGemini) {
+      elements.btnBatchGemini.addEventListener('click', async () => {
+        await callGeminiBatch();
+      });
+    }
+
+    // Restore Default Dataset
+    if (elements.btnRestoreDefault) {
+      elements.btnRestoreDefault.addEventListener('click', () => {
+        state.activeDatasetId = 'DEFAULT';
+        state.currentIndex = 0;
+        applyFilter();
+        renderCard(false);
+        saveCurrentState();
+        updateDatasetDropdown();
+        elements.modalFiles.classList.remove('open');
+        showToast('📚 기본 문제집(100문제 상세해설 포함)으로 복원되었습니다!');
+      });
+    }
+
+    // Gemini Setup Modal Handlers
+    if (elements.btnCloseGeminiSetup) {
+      elements.btnCloseGeminiSetup.addEventListener('click', () => {
+        elements.modalGeminiSetup.classList.remove('open');
+      });
+    }
+
+    if (elements.btnSaveGeminiKey) {
+      elements.btnSaveGeminiKey.addEventListener('click', async () => {
+        const val = elements.inputGeminiKeySetup.value.trim();
+        if (!val) {
+          alert('API 키를 입력해 주세요.');
+          return;
+        }
+        state.settings.geminiKey = val;
+        saveCurrentState();
+        elements.modalGeminiSetup.classList.remove('open');
+        showToast('Gemini API 키가 저장되었습니다! ✨');
+        const q = getCurrentQuestion();
+        if (q) {
+          await callGeminiForQuestion(q);
+        }
+      });
+    }
+
     // Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
       if (['input', 'textarea', 'select'].includes(e.target.tagName.toLowerCase())) return;
@@ -1159,6 +1288,229 @@
         toggleBookmark();
       }
     });
+  }
+
+  // --- Gemini AI Modal & Utilities ---
+  function openGeminiSetupModal() {
+    if (elements.modalGeminiSetup) {
+      if (elements.inputGeminiKeySetup) {
+        elements.inputGeminiKeySetup.value = state.settings.geminiKey || '';
+      }
+      elements.modalGeminiSetup.classList.add('open');
+    }
+  }
+
+  function isPlaceholderExplanation(exp) {
+    if (!exp) return true;
+    const s = exp.trim();
+    if (s.length < 35) return true;
+    if (/^\d+번\s*문제의\s*정답은/i.test(s)) return true;
+    if (/^정답은\s*\d+번/i.test(s) && s.length < 55) return true;
+    if (/출제\s*의도에\s*부합하는\s*정답입니다/i.test(s)) return true;
+    if (/해설이\s*(?:등록|준비)되지\s*않았습니다/i.test(s)) return true;
+    return false;
+  }
+
+  // Resilient multi-model Gemini REST API caller
+  async function callGeminiApi(key, payload) {
+    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+    let lastErr = null;
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `HTTP ${res.status}`;
+        if (res.status === 404 || errMsg.toLowerCase().includes('not found')) {
+          lastErr = new Error(errMsg);
+          continue; // fallback to next model
+        }
+        throw new Error(errMsg);
+      } catch (e) {
+        lastErr = e;
+        if (e.message && (e.message.includes('404') || e.message.toLowerCase().includes('not found'))) {
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastErr || new Error('Gemini API 호출에 실패했습니다.');
+  }
+
+  // --- Gemini API Call Functions ---
+  async function callGeminiForQuestion(q, silent = false) {
+    let key = state.settings.geminiKey;
+    if (!key) {
+      openGeminiSetupModal();
+      return false;
+    }
+
+    if (!silent) {
+      showToast('✨ Gemini AI가 문제 해석 및 전문 해설을 생성 중입니다...');
+      if (elements.btnGeminiAi) {
+        elements.btnGeminiAi.textContent = '⏳ AI 분석 중...';
+        elements.btnGeminiAi.disabled = true;
+      }
+    }
+
+    try {
+      const promptText = `당신은 국가기술자격증 필기시험 전문 1타 강사이자 운전용 오디오 학습 해설가입니다.
+운전 중이나 이동 중에 귀로 들으면서 머리에 쏙쏙 박힐 수 있도록 다음 문제에 대한 명쾌하고 친절한 음성용 해설을 작성해 주세요.
+
+[문제 정보]
+- 과목: ${q.subject || ''}
+- 문제: ${q.question}
+- 보기:
+${(q.options || []).join('\n')}
+- 정답: ${q.answerText || q.answer + '번'}
+
+[작성 지침]
+1. 첫 문장: 이 문제의 출제 의도와 핵심 개념을 한 줄로 명쾌하게 요약하세요.
+2. 두 번째 문장: 왜 정답이 되는지 구체적인 원리, 공식(계산법), 또는 암기 키워드를 설명하세요.
+3. 세 번째 문장: 다른 오답 보기가 왜 틀렸는지(함정 포인트) 또는 관련 시험 빈출 팁을 덧붙여 주세요.
+4. 듣기 편안한 부드러운 구어체(예: "~입니다", "~를 꼭 기억하세요")로 3~4문장으로 명확히 작성하세요. 불필요한 마크다운 별표(***)나 서식 기호는 절대 넣지 마세요.`;
+
+      const data = await callGeminiApi(key, {
+        contents: [{ parts: [{ text: promptText }] }]
+      });
+
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
+        const cleanExplanation = rawText
+          .replace(/\*\*/g, '')
+          .replace(/###/g, '')
+          .replace(/```/g, '')
+          .trim();
+
+        q.explanation = cleanExplanation;
+        q.isAiGenerated = true;
+
+        const currentQ = getCurrentQuestion();
+        if (currentQ && currentQ.id === q.id) {
+          elements.explanationText.textContent = q.explanation;
+          if (elements.aiExpBadge) elements.aiExpBadge.style.display = 'inline-block';
+          if (elements.aiExpPromptBanner) elements.aiExpPromptBanner.style.display = 'none';
+        }
+
+        if (state.activeDatasetId !== 'DEFAULT') {
+          const customOnly = { ...state.datasets };
+          delete customOnly.DEFAULT;
+          localStorage.setItem(STORAGE_KEYS.CUSTOM_DATASETS, JSON.stringify(customOnly));
+        }
+        saveCurrentState();
+
+        if (!silent) {
+          playSoftChime();
+          showToast('🎉 Gemini AI 전문 해설 완성!');
+        }
+        return true;
+      } else {
+        throw new Error('AI 응답 내용이 비어있습니다.');
+      }
+    } catch (err) {
+      if (!silent) {
+        alert('Gemini AI 해설 생성 오류: ' + err.message + '\n\nAPI 키가 유효한지 확인해 주세요.');
+      }
+      return false;
+    } finally {
+      if (elements.btnGeminiAi) {
+        elements.btnGeminiAi.textContent = '✨ AI 해설';
+        elements.btnGeminiAi.disabled = false;
+      }
+    }
+  }
+
+  async function callGeminiBatch() {
+    let key = state.settings.geminiKey;
+    if (!key) {
+      openGeminiSetupModal();
+      return;
+    }
+
+    const currentQuestions = state.datasets[state.activeDatasetId]?.questions || [];
+    if (currentQuestions.length === 0) {
+      alert('해설을 생성할 문제가 없습니다.');
+      return;
+    }
+
+    if (!confirm(`현재 문제집의 ${currentQuestions.length}개 문제 전체에 대해 Gemini AI로 전문 해설을 자동 생성하시겠습니까?\n(약 15~30초 소요됩니다.)`)) {
+      return;
+    }
+
+    showToast('🤖 AI 전체 해설 생성을 시작합니다...');
+    if (elements.btnBatchGemini) elements.btnBatchGemini.disabled = true;
+
+    try {
+      const batchSize = 5;
+      for (let i = 0; i < currentQuestions.length; i += batchSize) {
+        const chunk = currentQuestions.slice(i, i + batchSize);
+        if (elements.btnBatchGemini) {
+          elements.btnBatchGemini.textContent = `⏳ AI 해설 생성 중 (${i + 1}/${currentQuestions.length})...`;
+        }
+        
+        const promptText = `당신은 국가기술자격증 필기시험 전문 강사입니다. 다음 ${chunk.length}개 문제에 대해 운전 중 들을 수 있는 친절하고 명쾌한 음성용 해설을 JSON 배열 형식으로 작성해 주세요.
+
+문제 목록:
+${JSON.stringify(chunk.map(q => ({
+  id: q.id,
+  subject: q.subject,
+  question: q.question,
+  options: q.options,
+  answer: q.answerText || q.answer + '번'
+})), null, 2)}
+
+[응답 요구사항]
+오직 유효한 JSON 배열만 응답하세요. 각 객체는 {"id": 문제번호, "explanation": "해설내용"} 형태여야 합니다.
+해설은 핵심 개념 ➔ 정답 이유 ➔ 오답 함정/암기 팁 순으로 부드러운 구어체 3~4문장으로 작성하세요. 마크다운 별표 기호는 빼주세요.`;
+
+        const data = await callGeminiApi(key, {
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+
+        const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawJson) {
+          try {
+            const parsedArr = JSON.parse(rawJson);
+            if (Array.isArray(parsedArr)) {
+              parsedArr.forEach(item => {
+                const foundQ = currentQuestions.find(q => q.id === item.id);
+                if (foundQ && item.explanation) {
+                  foundQ.explanation = item.explanation.replace(/\*\*/g, '').trim();
+                  foundQ.isAiGenerated = true;
+                }
+              });
+            }
+          } catch (e) {
+            console.warn('JSON parse warning in batch:', e);
+          }
+        }
+
+        if (state.activeDatasetId !== 'DEFAULT') {
+          const customOnly = { ...state.datasets };
+          delete customOnly.DEFAULT;
+          localStorage.setItem(STORAGE_KEYS.CUSTOM_DATASETS, JSON.stringify(customOnly));
+        }
+        saveCurrentState();
+      }
+
+      renderCard(true);
+      showToast('🎉 전체 문제의 Gemini AI 전문 해설이 완성되었습니다!');
+    } catch (err) {
+      alert('AI 해설 생성 오류: ' + err.message);
+    } finally {
+      if (elements.btnBatchGemini) {
+        elements.btnBatchGemini.textContent = '🤖 현재 문제집 전체 Gemini AI 해설 자동 완성';
+        elements.btnBatchGemini.disabled = false;
+      }
+    }
   }
 
   // --- Initialize App ---
